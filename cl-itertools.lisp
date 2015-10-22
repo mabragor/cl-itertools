@@ -65,6 +65,22 @@
 	     (iter (for elt in thing)
 		   (yield elt)))))
 
+(defmethod mk-iter ((thing string))
+  (mk-iter (lambda-coro ()
+	     (iter (for char in-string thing)
+		   (yield char)))))
+
+(defmethod mk-iter ((thing vector))
+  (mk-iter (lambda-coro ()
+	     (iter (for char in-vector thing)
+		   (yield char)))))
+
+
+(defun collect-iter (thing)
+  (let (res)
+    (iter (for elt in-it thing)
+	  (push elt res))
+    (nreverse res)))
 
 ;;; Infinite iterators
 
@@ -98,4 +114,103 @@
 		 (iter (for i from 1 to n)
 		       (yield elem))))))
 	
+
+;;; Iterators terminating on the shortest input sequence
+
+(defiter ichain (&rest things) ()
+  (iter (for thing in things)
+	(iter (for elt in-it thing)
+	      (yield elt))))
+
+(defiter icompress (data selectors) ()
+  (iter (for elt in-it data)
+	(for crit in-it selectors)
+	(if crit
+	    (yield elt))))
+
+(defiter idropwhile (pred seq) ()
+  (let ((iter (mk-iter seq)))
+    (iter (for elt in-it iter)
+	  (when (not (funcall pred elt))
+	    (yield elt)
+	    (terminate)))
+    (iter (for elt in-it iter)
+	  (yield elt))))
+
+;; TODO : actually understand and write groupby
+
+(defiter ifilter (pred seq) ()
+  (iter (for elt in-it seq)
+	(if (funcall pred elt)
+	    (yield elt))))
+
+(defiter ifilterfalse (pred seq) ()
+  (iter (for elt in-it seq)
+	(if (not (funcall pred elt))
+	    (yield elt))))
+
+;; TODO : write islice (in general, first slices need to be understood and written
+
+(defiter izip (&rest things) ()
+  ;; Can't really optimize with NREVERSE here, since it will change the order
+  ;; of evaluation of expressions, which is a very important thing to save
+  (let ((things (mapcar #'mk-iter things)))
+    (iter (while t)
+	  (let (args)
+	    (iter (for thing in things)
+		  (let ((vals (multiple-value-list (funcall (i-coro thing)))))
+		    (if (not vals)
+			(coexit!)
+			(push (car vals) args))))
+	    (yield (nreverse args))))))
+
+(defiter istarmap (func seq) ()
+  (iter (for elt in-it seq)
+	(yield (apply func elt))))
+
+;; TODO : understand and implement how TEE works
+
+(defiter itakewhile (pred seq) ()
+  (let ((iter (mk-iter seq)))
+    (iter (for elt in-it iter)
+	  (when (not (funcall pred elt))
+	    (terminate))
+	  (yield elt))))
+
+(defun imap (func &rest things)
+  (istarmap func (apply #'izip things)))
+
+(defun parse-out-keywords (kwd-lst lambda-list)
+  "Return list (KWD1 KWD2 ... KWDn . OTHER-ARGS) collecting all keyword-looking pairs of arguments in lambda list"
+  (let ((kwds (make-array (length kwd-lst) :initial-element nil)))
+    (iter (generate elt in lambda-list)
+	  (if (keywordp (next elt))
+	      (setf (elt kwds (position elt kwd-lst :test #'eq)) (next elt))
+	      (collect elt into res))
+	  (finally (return (nconc (iter (for kwd in-vector kwds)
+					(collect kwd))
+				  res))))))
+
+
+(defiter izip-longest (&rest things) ()
+  ;; Can't really optimize with NREVERSE here, since it will change the order
+  ;; of evaluation of expressions, which is a very important thing to save
+  (destructuring-bind (fill-value . things) (parse-out-keywords '(:fill-value) things)
+    (let ((things (mapcar #'mk-iter things)))
+      (iter (while t)
+	    (let (args alive-iter-p)
+	      (setf alive-iter-p nil)
+	      (iter (for thing in things)
+		    (let ((vals (multiple-value-list (funcall (i-coro thing)))))
+		      (if (not vals)
+			  (push fill-value args)
+			  (progn (setf alive-iter-p t)
+				 (push (car vals) args)))))
+	      (if (not alive-iter-p)
+		  (terminate)
+		  (yield (nreverse args))))))))
+
+;;; combinatoric generators
+
+;; (defiter product (&rest things) ()
   
