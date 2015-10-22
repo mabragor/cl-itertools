@@ -27,6 +27,11 @@
 				  (terminate)
 				  (car vals)))))))
 
+(defmacro inext (iter-var &optional (arg nil arg-p))
+  `(let ((vals (multiple-value-list (funcall (i-coro ,iter-var) ,@(if arg-p `(,arg))))))
+     (if (not vals)
+	 (coexit!)
+	 (car vals))))
 
 (defmacro coexit! ()
   `(coexit (values)))
@@ -137,7 +142,26 @@
     (iter (for elt in-it iter)
 	  (yield elt))))
 
-;; TODO : actually understand and write groupby
+
+(defun igroupby (iterable &optional (key #'identity))
+  (let* ((iterator (mk-iter iterable))
+	 (tgt-key (gensym "KEY"))
+	 (cur-key tgt-key)
+	 cur-val)
+    (flet ((grouper ()
+	     (lambda-coro ()
+	       (iter (while (equal cur-key tgt-key))
+		     (yield cur-val)
+		     (setf cur-val (inext iterator)
+			   cur-key (funcall key cur-val))))))
+      (lambda-coro ()
+	(iter (while t)
+	      (iter (while (equal cur-key tgt-key))
+		    (setf cur-val (inext iterator)
+			  cur-key (funcall key cur-val)))
+	      (setf tgt-key cur-key)
+	      (yield (list cur-key (grouper))))))))
+
 
 (defiter ifilter (pred seq) ()
   (iter (for elt in-it seq)
