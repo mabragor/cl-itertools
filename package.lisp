@@ -7,5 +7,7 @@
 	   #:icount #:icycle #:irepeat #:ichain #:icompress #:idropwhile #:igroupby
 	   #:ifilter #:ifilterfalse #:islice #:imap #:istarmap #:itee
 	   #:itakewhile #:izip #:izip-longest
-	   #:iproduct #:ipermutations #:icombinations #:icombinations-with-replacement))
+	   #:iproduct #:ipermutations #:icombinations #:icombinations-with-replacement
+	   #:irange
+	   #:collect-iter))
 

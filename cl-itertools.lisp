@@ -89,7 +89,7 @@
 
 ;;; Infinite iterators
 
-(defiter icount (start &optional step) ()
+(defiter icount (start &optional (step 1)) ()
   "start, start + step, start + 2*step, ..."
   (let ((cur start))
     (iter (while t)
@@ -118,7 +118,19 @@
 	       (lambda-coro ()
 		 (iter (for i from 1 to n)
 		       (yield elem))))))
-	
+
+;; this one is embedded in Python, but is very useful
+(defun irange (&rest args)
+  (cond ((equal 1 (length args)) (lambda-coro ()
+				   (iter (for i from 0 below (car args))
+					 (yield i))))
+	((equal 2 (length args)) (lambda-coro ()
+				   (iter (for i from (car args) below (cadr args))
+					 (yield i))))
+	((equal 3 (length args)) (lambda-coro ()
+				   (iter (for i from (car args) below (cadr args) by (caddr args))
+					 (yield i))))
+	(t (error "IRANGE is expecting from 1 to 3 arguments [FROM] TO [STEP], but got: ~a" args))))
 
 ;;; Iterators terminating on the shortest input sequence
 
@@ -173,8 +185,6 @@
 	(if (not (funcall pred elt))
 	    (yield elt))))
 
-;; TODO : write islice (in general, first slices need to be understood and written
-
 (defiter izip (&rest things) ()
   ;; Can't really optimize with NREVERSE here, since it will change the order
   ;; of evaluation of expressions, which is a very important thing to save
@@ -191,8 +201,6 @@
 (defiter istarmap (func seq) ()
   (iter (for elt in-it seq)
 	(yield (apply func elt))))
-
-;; TODO : understand and implement how TEE works
 
 (defiter itakewhile (pred seq) ()
   (let ((iter (mk-iter seq)))
@@ -238,3 +246,7 @@
 
 ;; (defiter product (&rest things) ()
   
+;; TODO : understand and implement how TEE works
+
+;; TODO : write islice (in general, first slices need to be understood and written
+
