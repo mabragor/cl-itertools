@@ -242,6 +242,13 @@
 		  (terminate)
 		  (yield (nreverse args))))))))
 
+(defiter i-printing-count (start &optional (step 1)) (a)
+  (let ((cur start))
+    (iter (while t)
+    	  (format t "~a~%" (yield cur))
+	  (incf cur step))))
+
+
 ;;; combinatoric generators
 
 ;; (defiter product (&rest things) ()
