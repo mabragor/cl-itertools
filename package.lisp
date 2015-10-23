@@ -2,7 +2,7 @@
 
 (defpackage #:cl-itertools
   (:use #:cl #:iterate #:cl-coroutine)
-  (:export #:in-coro #:with-arg #:in-it #:defiter
+  (:export #:in-coro #:with-arg #:in-it #:defiter #:yield
 	   #:coexit! #:lambda-coro
 	   #:icount #:icycle #:irepeat #:ichain #:icompress #:idropwhile #:igroupby
 	   #:ifilter #:ifilterfalse #:islice #:imap #:istarmap #:itee
