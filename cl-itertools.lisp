@@ -51,8 +51,14 @@
   (let ((g!-name (gensym "NAME"))
 	(g!-arg (gensym "ARG")))
     `(progn (defcoroutine ,g!-name (,g!-arg)
-	      (macrolet ((yield (form) `(progn (cl-coroutine::yield ,form)
-					       ,',g!-arg)))
+	      (macrolet ((yield (form)
+			   ;; This G!-IT is needed as a KLUDGE, so that constructs like (YIELD (ITER ...))
+			   ;; are walked correctly
+			   (let ((g!-it (gensym "IT")))
+			     `(progn (let ((,g!-it ,form))
+				       (cl-coroutine::yield ,g!-it))
+				     ,',g!-arg)))
+			 (last-yield-value () ',g!-arg))
 		,@body
 		(coexit!)))
 	    (make-coroutine ',g!-name))))

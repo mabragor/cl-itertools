@@ -50,3 +50,21 @@
 (defiter just-a-printer ()
   (iter (for i from 1)
 	(format t "~a~%" (yield i))))
+
+(defiter just-a-printer2 ()
+  (format t "~a~%" (last-yield-value))
+  (iter (for i from 1)
+	(format t "~a~%" (yield i))))
+
+(defiter supplied-collector ()
+  (let ((it (iter (for i from 1 to 3)
+		  (collect i)
+		  (collect (yield i)))))
+    (yield it)))
+
+(test interaction-through-yield
+  (is (equal '(1 2 3 (1 b 2 c 3 d))
+	     (iter (for i in '(a b c d))
+		   (for elt in-it (supplied-collector) with-arg i)
+		   (collect elt)))))
+      

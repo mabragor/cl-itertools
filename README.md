@@ -42,6 +42,8 @@ For examples of use, see cl-itertools.lisp itself.
   close to Python ones. Special forms YIELD and COEXIT! are valid inside the body;
 * YIELD value -- return next value from iterator, giving control to caller.
   On next call to iterator value of this form is equal to the argument, supplied by caller (see example below);
+* YIELD-LAST-VALUE -- macrolet, which expands into the last value, supplied to the iterator by its caller
+  (see example below);
 * COEXIT! -- terminate iterator (analogous to 'raise StopIteration' of Python);
 * MK-ITER thing -- generic, which tries to convert anything to CL-ITERTOOLS iterator;
 * INEXT iter &optional value -- macro, useful when writing iterators which 'feed' on other iterators.
@@ -91,7 +93,7 @@ For example, let's define iterator that just prints whatever is supplied to it
 ```lisp
 (defiter just-a-printer ()
   (iter (for i from 1)
-  	(format "~a~%" (yield i))))
+  	(format t "~a~%" (yield i))))
 
 (defparameter *a* (just-a-printer))
 (inext-noexit *a* 'a)
@@ -113,6 +115,28 @@ Note how symbol A is not printed on first call to INEXT-NOEXIT
 On second call to INEXT-NOEXIT symbol 'B is correctly printed and the next integer -- 2 -- is returned.
 Second value T is an artefact of realization.
 
+We can modify this example, so that it would also print symbol A
+
+```lisp
+(defiter just-a-printer ()
+  (format t "~a~%" (yield-last-value))
+  (iter (for i from 1)
+  	(format t "~a~%" (yield i))))
+
+(defparameter *a* (just-a-printer))
+(inext-noexit *a* 'a)
+  A
+  1
+  T
+(inext-noexit *a* 'b)
+  B
+  2
+  T
+```
+
+For this we need to use (YIELD-LAST-VALUE) macrolet, that always gives the last value, supplied to iterator
+(to the coroutine) by its caller. Thus, before we encountered any YIELDs in the control flow of the iterator,
+this value is equal to the value first supplied to the iterator (i.e. 'A).
 
 TODO
 ----
