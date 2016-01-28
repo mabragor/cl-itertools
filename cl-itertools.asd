@@ -7,7 +7,7 @@
   :description "itertools Python lib ported to CL"
   :author "Alexandr Popolitov <popolit@gmail.com>"
   :license "MIT"
-  :version "0.1"
+  :version "0.2"
   :serial t
   :depends-on (#:cl-coroutine #:iterate)
   :components ((:file "package")

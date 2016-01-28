@@ -22,34 +22,47 @@
 	(g!-coro (gensym "G!-CORO")))
     `(progn (with ,g!-coro = (i-coro (mk-iter ,thing)))
 	    ;; multiple evaluation of arg is intended
-	    (,kwd ,var next (let ((vals (multiple-value-list (funcall ,g!-coro ,@(if arg-p `(,arg))))))
+	    ;; also, ITER is assumed to be created with DEFITER -- hence coro always accepts an argument
+	    (,kwd ,var next (let ((vals (multiple-value-list (funcall ,g!-coro ,(if arg-p arg 'nil)))))
 			      (if (not vals)
 				  (terminate)
 				  (car vals)))))))
 
 (defmacro inext (iter-var &optional (arg nil arg-p))
-  `(let ((vals (multiple-value-list (funcall (i-coro ,iter-var) ,@(if arg-p `(,arg))))))
+  "Iter is supposed to be created using DEFITER or MK-ITER -- hence its coro always accepts an arg."
+  `(let ((vals (multiple-value-list (funcall (i-coro ,iter-var) ,(if arg-p arg 'nil)))))
      (if (not vals)
 	 (coexit!)
 	 (car vals))))
 
+(defmacro inext-noexit (iter-var &optional (arg nil arg-p))
+  "Like INEXT, only when iterator is depleted, return (VALUES NIL NIL) and don't COEXIT."
+  `(let ((vals (multiple-value-list (funcall (i-coro ,iter-var) ,(if arg-p arg 'nil)))))
+     (if (not vals)
+	 (values nil nil)
+	 (values (car vals) t))))
+
+
 (defmacro coexit! ()
   `(coexit (values)))
 
-(defmacro lambda-coro (arg &body body)
-  (let ((g!-name (gensym "NAME")))
-    `(progn (defcoroutine ,g!-name ,arg
-	      ,@body
-	      (coexit!))
+(defmacro lambda-coro (&body body)
+  "The coroutine argument is passed through YIELD macro."
+  (let ((g!-name (gensym "NAME"))
+	(g!-arg (gensym "ARG")))
+    `(progn (defcoroutine ,g!-name (,g!-arg)
+	      (macrolet ((yield (form) `(progn (cl-coroutine::yield ,form)
+					       ,',g!-arg)))
+		,@body
+		(coexit!)))
 	    (make-coroutine ',g!-name))))
 
-(defmacro defiter (name args yield-arg &body body)
+(defmacro defiter (name args &body body)
   ;; TODO : more accurate way is to parse-out docstring from body
   ;;        and place it to DEFUN
   `(defun ,name ,args
      (make-instance 'iterator
-		    :coro (lambda-coro ,yield-arg
-			    ,@body))))
+		    :coro (lambda-coro ,@body))))
 
 (defgeneric mk-iter (thing))
 
@@ -66,17 +79,17 @@
 		 :coro thing))
 
 (defmethod mk-iter ((thing list))
-  (mk-iter (lambda-coro ()
+  (mk-iter (lambda-coro
 	     (iter (for elt in thing)
 		   (yield elt)))))
 
 (defmethod mk-iter ((thing string))
-  (mk-iter (lambda-coro ()
+  (mk-iter (lambda-coro
 	     (iter (for char in-string thing)
 		   (yield char)))))
 
 (defmethod mk-iter ((thing vector))
-  (mk-iter (lambda-coro ()
+  (mk-iter (lambda-coro
 	     (iter (for char in-vector thing)
 		   (yield char)))))
 
@@ -89,14 +102,14 @@
 
 ;;; Infinite iterators
 
-(defiter icount (start &optional (step 1)) ()
+(defiter icount (start &optional (step 1))
   "start, start + step, start + 2*step, ..."
   (let ((cur start))
     (iter (while t)
 	  (yield cur)
 	  (incf cur step))))
 
-(defiter icycle (p) ()
+(defiter icycle (p)
   "p0, p1, ... plast, p0, p1, ..."
   (let (stash)
     (iter (for elt in-it p)
@@ -112,40 +125,40 @@
   (assert (or (null n)
 	      (and (integerp n) (>= n 0))))
   (mk-iter (if (null n)
-	       (lambda-coro ()
+	       (lambda-coro
 		 (iter (while t)
 		       (yield elem)))
-	       (lambda-coro ()
+	       (lambda-coro
 		 (iter (for i from 1 to n)
 		       (yield elem))))))
 
 ;; this one is embedded in Python, but is very useful
 (defun irange (&rest args)
-  (cond ((equal 1 (length args)) (lambda-coro ()
+  (cond ((equal 1 (length args)) (lambda-coro
 				   (iter (for i from 0 below (car args))
 					 (yield i))))
-	((equal 2 (length args)) (lambda-coro ()
+	((equal 2 (length args)) (lambda-coro
 				   (iter (for i from (car args) below (cadr args))
 					 (yield i))))
-	((equal 3 (length args)) (lambda-coro ()
+	((equal 3 (length args)) (lambda-coro
 				   (iter (for i from (car args) below (cadr args) by (caddr args))
 					 (yield i))))
 	(t (error "IRANGE is expecting from 1 to 3 arguments [FROM] TO [STEP], but got: ~a" args))))
 
 ;;; Iterators terminating on the shortest input sequence
 
-(defiter ichain (&rest things) ()
+(defiter ichain (&rest things)
   (iter (for thing in things)
 	(iter (for elt in-it thing)
 	      (yield elt))))
 
-(defiter icompress (data selectors) ()
+(defiter icompress (data selectors)
   (iter (for elt in-it data)
 	(for crit in-it selectors)
 	(if crit
 	    (yield elt))))
 
-(defiter idropwhile (pred seq) ()
+(defiter idropwhile (pred seq)
   (let ((iter (mk-iter seq)))
     (iter (for elt in-it iter)
 	  (when (not (funcall pred elt))
@@ -161,12 +174,12 @@
 	 (cur-key tgt-key)
 	 cur-val)
     (flet ((grouper ()
-	     (lambda-coro ()
+	     (lambda-coro
 	       (iter (while (equal cur-key tgt-key))
 		     (yield cur-val)
 		     (setf cur-val (inext iterator)
 			   cur-key (funcall key cur-val))))))
-      (lambda-coro ()
+      (lambda-coro
 	(iter (while t)
 	      (iter (while (equal cur-key tgt-key))
 		    (setf cur-val (inext iterator)
@@ -175,34 +188,31 @@
 	      (yield (list cur-key (grouper))))))))
 
 
-(defiter ifilter (pred seq) ()
+(defiter ifilter (pred seq)
   (iter (for elt in-it seq)
 	(if (funcall pred elt)
 	    (yield elt))))
 
-(defiter ifilterfalse (pred seq) ()
+(defiter ifilterfalse (pred seq)
   (iter (for elt in-it seq)
 	(if (not (funcall pred elt))
 	    (yield elt))))
 
-(defiter izip (&rest things) ()
+(defiter izip (&rest things)
   ;; Can't really optimize with NREVERSE here, since it will change the order
   ;; of evaluation of expressions, which is a very important thing to save
   (let ((things (mapcar #'mk-iter things)))
     (iter (while t)
 	  (let (args)
 	    (iter (for thing in things)
-		  (let ((vals (multiple-value-list (funcall (i-coro thing)))))
-		    (if (not vals)
-			(coexit!)
-			(push (car vals) args))))
+		  (push (inext thing) args))
 	    (yield (nreverse args))))))
 
-(defiter istarmap (func seq) ()
+(defiter istarmap (func seq)
   (iter (for elt in-it seq)
 	(yield (apply func elt))))
 
-(defiter itakewhile (pred seq) ()
+(defiter itakewhile (pred seq)
   (let ((iter (mk-iter seq)))
     (iter (for elt in-it iter)
 	  (when (not (funcall pred elt))
@@ -224,7 +234,7 @@
 				  res))))))
 
 
-(defiter izip-longest (&rest things) ()
+(defiter izip-longest (&rest things)
   ;; Can't really optimize with NREVERSE here, since it will change the order
   ;; of evaluation of expressions, which is a very important thing to save
   (destructuring-bind (fill-value . things) (parse-out-keywords '(:fill-value) things)
@@ -233,16 +243,16 @@
 	    (let (args alive-iter-p)
 	      (setf alive-iter-p nil)
 	      (iter (for thing in things)
-		    (let ((vals (multiple-value-list (funcall (i-coro thing)))))
-		      (if (not vals)
-			  (push fill-value args)
+		    (multiple-value-bind (val got) (inext-noexit thing)
+		      (if got
 			  (progn (setf alive-iter-p t)
-				 (push (car vals) args)))))
+				 (push val args))
+			  (push fill-value args))))
 	      (if (not alive-iter-p)
 		  (terminate)
 		  (yield (nreverse args))))))))
 
-(defiter i-printing-count (start &optional (step 1)) (a)
+(defiter i-printing-count (start &optional (step 1))
   (let ((cur start))
     (iter (while t)
     	  (format t "~a~%" (yield cur))
