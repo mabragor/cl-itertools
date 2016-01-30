@@ -7,6 +7,8 @@
 (defclass iterator ()
   ((coro :initarg :coro :accessor i-coro)))
 
+(define-condition stop-iteration (error) ())
+
 (defmacro-driver (for var in-coro coro &optional with-arg (arg nil arg-p))
   (let ((kwd (if generate 'generate 'for))
 	(g!-coro (gensym "G!-CORO")))
@@ -42,6 +44,12 @@
 	 (values nil nil)
 	 (values (car vals) t))))
 
+(defmacro inext-or-error (iter-var &optional (arg nil arg-p))
+  `(let ((vals (multiple-value-list (funcall (i-coro ,iter-var) ,(if arg-p arg 'nil)))))
+     (if (not vals)
+	 (error 'stop-iteration)
+	 (values (car vals) t))))
+  
 
 (defmacro coexit! ()
   `(coexit (values)))

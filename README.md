@@ -51,6 +51,7 @@ For examples of use, see cl-itertools.lisp itself.
   supply value to the iter being called;
 * INEXT-NOEXIT iter &optional value -- same as INEXT, but when ITER is depleted, don't terminate,
   but return (VALUES NIL NIL) (like, e.g., GETHASH does);
+* INEXT-OR-ERROR iter &optional value -- same as INEXT, but when ITER is depleted, raises STOP-ITERATION;
 * LAMBDA-CORO &body body -- create anonymous coroutine. Inside, coroutine argument is gensymmed,
   but you can use (YIELD ...) to access values supplied to coroutine on successive invocations;
 * FOR var IN-IT iter WITH-ARG arg -- iterate driver to iterate over generic stuff.
