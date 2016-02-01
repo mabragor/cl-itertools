@@ -50,18 +50,17 @@
   "The coroutine argument is passed through YIELD macro."
   (let ((g!-name (gensym "NAME"))
 	(g!-arg (gensym "ARG")))
-    `(progn (defcoroutine ,g!-name (,g!-arg)
-	      (macrolet ((yield (form)
-			   ;; This G!-IT is needed as a KLUDGE, so that constructs like (YIELD (ITER ...))
-			   ;; are walked correctly
-			   (let ((g!-it (gensym "IT")))
-			     `(progn (let ((,g!-it ,form))
-				       (cl-coroutine::yield ,g!-it))
-				     ,',g!-arg)))
-			 (last-yield-value () ',g!-arg))
-		,@body
-		(coexit!)))
-	    (make-coroutine ',g!-name))))
+    `(cl-coroutine::label-coro nil (,g!-arg)
+       (macrolet ((yield (form)
+		    ;; This G!-IT is needed as a KLUDGE, so that constructs like (YIELD (ITER ...))
+		    ;; are walked correctly
+		    (let ((g!-it (gensym "IT")))
+		      `(progn (let ((,g!-it ,form))
+				(cl-coroutine::yield ,g!-it))
+			      ,',g!-arg)))
+		  (last-yield-value () ',g!-arg))
+	 ,@body
+	 (coexit!)))))
 
 (defmacro defiter (name args &body body)
   ;; TODO : more accurate way is to parse-out docstring from body
@@ -273,3 +272,26 @@
 
 ;; TODO : write islice (in general, first slices need to be understood and written
 
+
+
+
+;; Let's try some CL-CORO modified magic!
+
+(defiter my-iter ()
+  (flet ((foo ()
+	   (list (this-coro nil)
+		 (this-coro nil)
+		 (this-coro nil))))
+    (labels ((dispatch (expr)
+	       (if (eq :foo expr)
+		   (dispatch (yield (foo))))))
+      (let ((j 0))
+	(dispatch (last-yield-value))
+	(incf j)
+	(iter (for i from 1)
+	      (dispatch (yield (list i j))))))))
+
+;; somehow this iterator does not proceed the way I want
+
+
+	
