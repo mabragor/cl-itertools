@@ -55,9 +55,11 @@
 		    ;; This G!-IT is needed as a KLUDGE, so that constructs like (YIELD (ITER ...))
 		    ;; are walked correctly
 		    (let ((g!-it (gensym "IT")))
-		      `(progn (let ((,g!-it ,form))
-				(cl-coroutine::yield ,g!-it))
-			      ,',g!-arg)))
+		      `(progn ;; (let ((,g!-it ,form))
+			 ;; 	(cl-coroutine::yield ,g!-it))
+			 ;; Let's try like that, since it's then different order of evaluation
+			 (cl-coroutine::yield ,form)
+			 ,',g!-arg)))
 		  (last-yield-value () ',g!-arg))
 	 ,@body
 	 (coexit!)))))
@@ -280,19 +282,26 @@
 (defiter my-iter ()
   (flet ((foo ()
 	   (list (progn (format t "~a~%" (this-coro))
-			(funcall (this-coro) nil))
-		 (progn (format t "~a~%" (this-coro))
-			(funcall (this-coro) nil))
-		 (progn (format t "~a~%" (this-coro))
 			(funcall (this-coro) nil)))))
-    (labels ((dispatch (expr)
-	       (if (eq :foo expr)
-		   (dispatch (yield (foo))))))
+    (macrolet ((dispatch (expr)
+		 ;; OK, maybe we try non-recursive, non-function approach?
+		 (alexandria:with-gensyms (it)
+		   `(let ((,it ,expr))
+		      (iter (while t)
+			    (if (not (eq :foo ,it))
+				(return ,it))
+			    (setf ,it (yield (foo))))))))
       (let ((j 0))
+	(dispatch (yield nil))
+	(incf j)
 	(iter (for i from 1)
-	      (if-first-time (progn (dispatch (last-yield-value))
-				    (incf j)))
 	      (dispatch (yield (list i j))))))))
+
+;; Hmm, so it looks like it matters, where did I enter into the DISPATCH loop
+;; -- the continuation stays the same outside the recursion.
+
+;; so, rewriting dispatch in an iterative style (and, furthermore, as a macro)
+;; didn't change anything. I wonder, why is that?
 
 ;; somehow this iterator does not proceed the way I want
 
