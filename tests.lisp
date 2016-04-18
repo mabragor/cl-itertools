@@ -68,3 +68,14 @@
 		   (for elt in-it (supplied-collector) with-arg i)
 		   (collect elt)))))
       
+(def-launched-iter counter (x)
+  (let ((count x))
+    (iter (while t)
+	  (setf count (1+ (progn (yield count)
+				 count))))))
+
+(test def-launched-iter
+  (is (equal '(2 3 4)
+	     (iter (for i in-it (counter 1))
+		   (for j from 4 to 6)
+		   (collect i)))))

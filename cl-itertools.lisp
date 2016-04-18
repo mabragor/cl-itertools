@@ -72,11 +72,25 @@
 	    (make-coroutine ',g!-name))))
 
 (defmacro defiter (name args &body body)
-  ;; TODO : more accurate way is to parse-out docstring from body
-  ;;        and place it to DEFUN
-  `(defun ,name ,args
-     (make-instance 'iterator
-		    :coro (lambda-coro ,@body))))
+  (multiple-value-bind (body decls doc) (parse-body body :documentation t)
+    `(defun ,name ,args
+       ,@decls
+       ,@(if doc `(,doc))
+       (make-instance 'iterator
+		      :coro (lambda-coro ,@body)))))
+
+;; TODO : I don't really like the code-duplication from DEFITER
+;; However, the gluing of args is too cumbersome to do for now
+(defmacro def-launched-iter (name args &body body)
+  (multiple-value-bind (body decls doc) (parse-body body :documentation t)
+    `(defun ,name ,args
+       ,@decls
+       ,@(if doc `(,doc))
+       (let ((it (make-instance 'iterator
+				:coro (lambda-coro ,@body))))
+	 (inext-or-error it)
+	 it))))
+
 
 (defgeneric mk-iter (thing))
 
@@ -281,3 +295,4 @@
 
 ;; TODO : write islice (in general, first slices need to be understood and written
 
+       

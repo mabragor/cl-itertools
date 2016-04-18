@@ -59,7 +59,8 @@ For examples of use, see cl-itertools.lisp itself.
   ARG is (re-evaluated on each cycle) form, whose result is supplied to iterator on each invocation;
 * FOR var IN-CORO coro WITH-ARG arg -- iterate driver for coroutines. Iteration stops as soon as
   coroutine returns no values (i.e. (VALUES))
-
+* DEF-LAUNCHED-ITER is like DEFITER, but calls iterator one time before returing it. Thus,
+  returned iterator is at the first YIELD, when it's returned.
 
 Technicalities
 --------------
